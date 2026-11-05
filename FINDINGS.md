@@ -10,7 +10,9 @@
 | Ocean sees another company's revenue | Cache key had no tenant, mock data ignored the tenant, property list was hardcoded | Tenant in the cache key, tenant-scoped `GET /api/v1/properties`, the same 404 for other tenants' properties | Correct figures in both call orders. Each client lists only its own three properties |
 | Totals a few cents off | `float()` on the server, then `Math.round` in the browser | Round half-up with `Decimal` on the server | `2250.555` now returns `2250.56`, using a temporary test row. No seeded total shows this bug |
 
-All 40 backend regression tests pass against the running stack. Some of them insert temporary rows, which are removed afterwards.
+All 43 backend regression tests pass against the running stack. Some of them insert temporary rows, which are removed afterwards.
+
+**Also found:** the starter's mock auth let anyone read Sunset's revenue without a real login. That's closed for client data, but the mock auth paths themselves remain and must not reach production.
 
 **Branch:** `fix/revenue-dashboard`, one commit per fix group.
 
@@ -85,16 +87,26 @@ Root-cause line numbers below refer to the starter commit, `d1835ec5d`.
 
 **Proof:** tests cover null, -100.0, +100.0, -25.0, 0.0 and the December to January boundary. In the browser, March shows "No prior data" and April shows a red -100.0%. The green and neutral badges weren't seen in a browser, only their API values. The stale-response fix was checked by hand with a delayed response, and has no automated test.
 
+### Mock auth reaching Sunset's data: commit `11f1997cc`
+
+| Root cause | Where | Fix |
+|---|---|---|
+| The mock auth client accepts a hardcoded `mock-token-123`, trusts tokens without checking their signature, and logs in built-in users without a password. All of these can act as `candidate@propertyflow.com`, which was mapped to `tenant-a` | `backend/app/database.py:305`, `backend/app/database.py:312`, `backend/app/api/v1/login.py:106`, `backend/app/core/tenant_resolver.py:88` | Removed the mapping, so only the two client accounts have a tenant |
+
+**Proof:** the review cycle's brief audit found the hardcoded token, and following that code found the other two paths. All three returned Sunset's revenue before the fix and return 403 after it, covered by tests. Both client logins still work.
+
 ## Checked and ruled out
 
 - **`supabase_url is required` in the log:** it comes from a different pool, logged once at startup, and doesn't affect revenue.
-- **Authentication:** no token, a garbage token and a wrong-secret token all return 401.
+- **Authentication:** no token and a garbage token return 401. A token signed with the wrong secret returns 401 unless its email matches a built-in mock user, which is the hole fixed above.
 - **`X-Simulated-Tenant`:** the frontend sends it and the backend ignores it.
 - **Other caches:** the `SecureAPI` cache key includes tenant and session, nginx only serves static files, and nothing writes to the IndexedDB query cache.
 - **Console errors at login:** `SessionRecovery ... 'split'` and `Login error ... 'session'` appeared before any change. Login still works, and they weren't investigated further.
 
 ## Known and not fixed
 
+- **Mock auth paths remain.** `mock-token-123`, unsigned token decoding and passwordless login for built-in users still authenticate, and some of those users are admins. They can no longer read client revenue, but they must not reach production, and routes outside the dashboard weren't audited against them.
+- **`frontend/dist` is stale.** It's committed and still holds the old bundle. `docker compose up --build` rebuilds it, but `netlify.toml` publishes `dist`, so a direct deploy would serve the old UI.
 - **Currency** is hardcoded to USD although `reservations.currency` exists. All seeded rows are USD, and mixed currencies would need a conversion rule the brief doesn't give.
 - **Row-level security** is enabled with no policies, and the app connects as a superuser, so isolation rests on the query filters.
 - **The signing secret** has a default in `config.py` and `docker-compose.yml`, and anyone with it can sign a token.

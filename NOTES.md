@@ -4,7 +4,7 @@ Started 17:50 · Feature freeze 19:25 (+1:35) · Hard stop 19:50 (+2:00)
 
 ## Summary
 
-**Status:** all fixes are committed on `fix/revenue-dashboard` and 40 tests pass. The code review found nothing blocking. The write-up is in `FINDINGS.md`, and the Loom is the remaining deliverable.
+**Status:** all fixes are committed on `fix/revenue-dashboard` and 43 tests pass. The code review found nothing blocking, and the brief audit led to one more fix for the mock auth paths. The write-up is in `FINDINGS.md`, and the Loom is the remaining deliverable.
 
 **Main finding:** the dashboard has never read Postgres. Several faults on the database path each end in a catch-all `except` that returns hardcoded numbers to any tenant. So nothing the clients see comes from their data, and the three reported symptoms sit on top of that.
 
@@ -316,3 +316,4 @@ Time left at 18:54: 31 min to freeze, 56 to the hard stop. The five commits are 
 - 19:28 commit 5 verified: real trend. Review cycle started
 - 19:30 code review finished, nothing blocking
 - 19:35 write-up in `FINDINGS.md`, Omar recording the Loom
+- 19:40 brief audit finished. Mock auth could read Sunset's data, fixed and tested
