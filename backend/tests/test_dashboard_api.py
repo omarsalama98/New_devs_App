@@ -178,3 +178,51 @@ def test_properties_returns_503_with_no_figures_when_data_is_unavailable(offline
 
     assert response.status_code == 503
     assert list(response.json()) == ["detail"]
+
+
+def test_prop_001_counts_march_and_february_in_paris_time(get_summary, sunset_headers):
+    # res-tz-1 checks in at 23:30 UTC on 29 February, which is already 1 March in Paris
+    assert totals(get_summary(sunset_headers, "prop-001", month=3, year=2024)) == (2250.0, 4)
+    assert totals(get_summary(sunset_headers, "prop-001", month=2, year=2024)) == (0.0, 0)
+
+
+def test_sunset_march_total_across_properties(get_summary, sunset_headers):
+    revenue = [
+        totals(get_summary(sunset_headers, prop["id"], month=3, year=2024))[0]
+        for prop in SUNSET_PROPERTIES
+    ]
+
+    assert sum(revenue) == 13326.0
+
+
+def test_late_march_check_in_counts_as_march_in_new_york(get_summary, ocean_headers, add_reservation):
+    # 03:00 UTC on 1 April is 23:00 on 31 March in New York
+    add_reservation("test-tz-new-york", "prop-004", "tenant-b", "2024-04-01 03:00:00+00", 100)
+
+    assert totals(get_summary(ocean_headers, "prop-004", month=3, year=2024)) == (1876.5, 5)
+    assert totals(get_summary(ocean_headers, "prop-004", month=4, year=2024)) == (0.0, 0)
+
+
+def test_other_tenant_property_gets_404_for_a_month(get_summary, ocean_headers):
+    assert get_summary(ocean_headers, "prop-002", month=3, year=2024).status_code == 404
+
+
+def test_invalid_month_gets_422(get_summary, sunset_headers):
+    assert get_summary(sunset_headers, "prop-001", month=13, year=2024).status_code == 422
+
+
+@pytest.mark.parametrize("params", [{"month": 3}, {"year": 2024}])
+def test_month_and_year_must_be_sent_together(get_summary, sunset_headers, params):
+    assert get_summary(sunset_headers, "prop-001", **params).status_code == 400
+
+
+def test_month_and_all_time_cache_entries_stay_separate(get_summary, sunset_headers, add_reservation, live_redis):
+    # A May booking, so the all-time and March figures differ
+    add_reservation("test-cache-may", "prop-001", "tenant-a", "2024-05-10 12:00:00+00", 100)
+
+    # The second round reads what the first one stored
+    for _ in range(2):
+        assert totals(get_summary(sunset_headers, "prop-001")) == (2350.0, 5)
+        assert totals(get_summary(sunset_headers, "prop-001", month=3, year=2024)) == (2250.0, 4)
+
+    assert live_redis.exists("revenue:tenant-a:prop-001", "revenue:tenant-a:prop-001:2024-03") == 2

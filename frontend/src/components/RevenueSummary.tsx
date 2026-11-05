@@ -12,9 +12,11 @@ interface RevenueSummaryProps {
     propertyId?: string;
     debugTenant?: string; 
     showRaw?: boolean;
+    month?: number;
+    year?: number;
 }
 
-export const RevenueSummary: React.FC<RevenueSummaryProps> = ({ propertyId = 'prop-001', debugTenant, showRaw }) => {
+export const RevenueSummary: React.FC<RevenueSummaryProps> = ({ propertyId = 'prop-001', debugTenant, showRaw, month, year }) => {
     const [data, setData] = useState<RevenueData | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -30,7 +32,9 @@ export const RevenueSummary: React.FC<RevenueSummaryProps> = ({ propertyId = 'pr
                 // We pass the simulatedTenant option which SecureAPI will attach as a header
                 const response = await SecureAPI.getDashboardSummary(propertyId, {
                     simulatedTenant: activeTenant,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
+                    month,
+                    year
                 });
                 setData(response);
             } catch (err) {
@@ -42,7 +46,7 @@ export const RevenueSummary: React.FC<RevenueSummaryProps> = ({ propertyId = 'pr
         };
 
         fetchRevenue();
-    }, [propertyId, activeTenant]);
+    }, [propertyId, activeTenant, month, year]);
 
     if (loading) {
         return (
@@ -63,6 +67,9 @@ export const RevenueSummary: React.FC<RevenueSummaryProps> = ({ propertyId = 'pr
     if (!data) return null;
 
     const displayTotal = Math.round(data.total_revenue * 100) / 100;
+    const periodLabel = month && year
+        ? new Date(year, month - 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+        : 'All time';
 
     return (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow duration-300">
@@ -89,6 +96,7 @@ export const RevenueSummary: React.FC<RevenueSummaryProps> = ({ propertyId = 'pr
                                 12%
                             </span>
                         </div>
+                        <p className="text-xs text-gray-500 font-medium mt-1">{periodLabel}</p>
                     </div>
                 </div>
 
