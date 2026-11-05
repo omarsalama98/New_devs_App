@@ -239,14 +239,15 @@ class LocalStorageManager {
     
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && (key.includes('supabase') || key.includes('sb-'))) {
+      // base360-auth-token is where the local auth client keeps the login session
+      if (key && (key.includes('supabase') || key.includes('sb-') || key === 'base360-auth-token')) {
         const value = localStorage.getItem(key);
         if (value) {
           preservedData[key] = value;
         }
       }
     }
-    
+
     // Also preserve version key
     const versionValue = localStorage.getItem(STORAGE_VERSION_KEY);
     if (versionValue) {
