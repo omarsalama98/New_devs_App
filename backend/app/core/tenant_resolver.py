@@ -85,10 +85,8 @@ class TenantResolver:
             return "tenant-a"
         if user_email == "ocean@propertyflow.com":
             return "tenant-b"
-        if user_email == "candidate@propertyflow.com":
-            return "tenant-a"
-            
-        # An unknown user belongs to no tenant
+
+        # Anyone else, including the mock client's built-in users, belongs to no tenant
         return None
 
     @staticmethod
