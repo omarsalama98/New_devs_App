@@ -226,3 +226,21 @@ def test_month_and_all_time_cache_entries_stay_separate(get_summary, sunset_head
         assert totals(get_summary(sunset_headers, "prop-001", month=3, year=2024)) == (2250.0, 4)
 
     assert live_redis.exists("revenue:tenant-a:prop-001", "revenue:tenant-a:prop-001:2024-03") == 2
+
+
+def test_sub_cent_total_rounds_half_up_for_sunset(get_summary, sunset_headers, add_reservation):
+    # 2250.000 + 0.555 = 2250.555, which a float holds as slightly less, so browser rounding gave 2250.55
+    add_reservation("test-cents-sunset", "prop-001", "tenant-a", "2024-05-10 12:00:00+00", "0.555")
+
+    assert totals(get_summary(sunset_headers, "prop-001")) == (2250.56, 5)
+
+
+def test_sub_cent_total_rounds_half_up_for_ocean(get_summary, ocean_headers, add_reservation):
+    # Ocean's prop-001 has no bookings, so this row is the whole total
+    add_reservation("test-cents-ocean", "prop-001", "tenant-b", "2024-05-10 12:00:00+00", "1.005")
+
+    assert totals(get_summary(ocean_headers, "prop-001")) == (1.01, 1)
+
+
+def test_total_already_in_cents_is_unchanged(get_summary, sunset_headers):
+    assert totals(get_summary(sunset_headers, "prop-002")) == (4975.5, 4)

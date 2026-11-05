@@ -1,3 +1,4 @@
+from decimal import Decimal, ROUND_HALF_UP
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Dict, Any, Optional
 from app.services.cache import get_revenue_summary
@@ -48,7 +49,8 @@ async def get_dashboard_summary(
     except RevenueDataUnavailable:
         raise HTTPException(status_code=503, detail="Revenue data is temporarily unavailable. Please try again shortly.")
     
-    total_revenue_float = float(revenue_data['total'])
+    # Round before converting: a float can't hold the exact value, so half-up is only reliable on the Decimal
+    total_revenue_float = float(Decimal(revenue_data["total"]).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
     
     return {
         "property_id": revenue_data['property_id'],
