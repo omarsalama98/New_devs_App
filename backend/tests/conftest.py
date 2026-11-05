@@ -1,10 +1,13 @@
 import pytest
 import redis
 import requests
+from jose import jwt
 
 # Host ports published by docker-compose.yml
 API_URL = "http://localhost:8000"
 REDIS_URL = "redis://localhost:6380/0"
+# SECRET_KEY in docker-compose.yml
+SECRET_KEY = "debug_challenge_secret"
 
 SUNSET = ("sunset@propertyflow.com", "client_a_2024")
 OCEAN = ("ocean@propertyflow.com", "client_b_2024")
@@ -46,6 +49,17 @@ def ocean_headers(live_redis):
     return login(*OCEAN)
 
 
+@pytest.fixture(scope="session")
+def unknown_user_headers(live_redis):
+    """A validly signed token for an email that has no tenant mapping."""
+    token = jwt.encode(
+        {"id": "unknown-user", "email": "nobody@example.com", "aud": "authenticated"},
+        SECRET_KEY,
+        algorithm="HS256",
+    )
+    return {"Authorization": f"Bearer {token}"}
+
+
 @pytest.fixture
 def clear_revenue_cache(live_redis):
     """Removes only the revenue entries, so each live test starts from an empty cache."""
@@ -64,5 +78,15 @@ def get_summary(clear_revenue_cache):
             headers=headers,
             timeout=10,
         )
+
+    return call
+
+
+@pytest.fixture
+def get_properties(live_redis):
+    """Calls the property list on the running API, as the client whose headers are passed."""
+
+    def call(headers):
+        return requests.get(f"{API_URL}/api/v1/properties", headers=headers, timeout=10)
 
     return call

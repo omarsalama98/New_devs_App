@@ -11,6 +11,9 @@ logger = logging.getLogger(__name__)
 class RevenueDataUnavailable(Exception):
     """The database can't be reached, so no revenue figures can be given."""
 
+class PropertyNotFound(Exception):
+    """The property doesn't exist, or belongs to another tenant."""
+
 async def _fetch_rows(query: str, params: Dict[str, Any]) -> List[Any]:
     """
     Runs a read query on the shared pool. Database failures become RevenueDataUnavailable.
@@ -63,35 +66,45 @@ async def calculate_total_revenue(property_id: str, tenant_id: str) -> Dict[str,
     """
     Aggregates revenue from database.
     """
+    # LEFT JOIN: an owned property with no bookings gives one row with 0, a property the tenant doesn't own gives no row
     rows = await _fetch_rows("""
         SELECT
-            property_id,
-            SUM(total_amount) as total_revenue,
-            COUNT(*) as reservation_count
-        FROM reservations
-        WHERE property_id = :property_id AND tenant_id = :tenant_id
-        GROUP BY property_id
+            p.id,
+            COALESCE(SUM(r.total_amount), 0) as total_revenue,
+            COUNT(r.id) as reservation_count
+        FROM properties p
+        LEFT JOIN reservations r ON r.property_id = p.id AND r.tenant_id = p.tenant_id
+        WHERE p.id = :property_id AND p.tenant_id = :tenant_id
+        GROUP BY p.id
     """, {
         "property_id": property_id,
         "tenant_id": tenant_id
     })
 
-    if rows:
-        row = rows[0]
-        total_revenue = Decimal(str(row.total_revenue))
-        return {
-            "property_id": property_id,
-            "tenant_id": tenant_id,
-            "total": str(total_revenue),
-            "currency": "USD",
-            "count": row.reservation_count
-        }
+    if not rows:
+        raise PropertyNotFound(property_id)
 
-    # No reservations found for this property
+    row = rows[0]
+    total_revenue = Decimal(str(row.total_revenue))
     return {
         "property_id": property_id,
         "tenant_id": tenant_id,
-        "total": "0.00",
+        "total": str(total_revenue),
         "currency": "USD",
-        "count": 0
+        "count": row.reservation_count
     }
+
+async def list_properties(tenant_id: str) -> List[Dict[str, str]]:
+    """
+    Lists the tenant's own properties.
+    """
+    rows = await _fetch_rows("""
+        SELECT id, name
+        FROM properties
+        WHERE tenant_id = :tenant_id
+        ORDER BY name
+    """, {
+        "tenant_id": tenant_id
+    })
+
+    return [{"id": row.id, "name": row.name} for row in rows]
