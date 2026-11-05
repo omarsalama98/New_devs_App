@@ -1,6 +1,6 @@
 from datetime import datetime
-from decimal import Decimal
-from typing import Dict, Any, List
+from decimal import Decimal, ROUND_HALF_UP
+from typing import Dict, Any, List, Optional
 import logging
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -82,6 +82,15 @@ async def calculate_monthly_revenue(property_id: str, tenant_id: str, month: int
     })
 
     return _revenue_summary(rows, property_id, tenant_id)
+
+def calculate_trend_percent(current: Decimal, previous: Decimal) -> Optional[Decimal]:
+    """
+    Percentage change from the previous month to the current one. With no previous revenue there is nothing to compare with.
+    """
+    if previous == 0:
+        return None
+
+    return ((current - previous) / previous * 100).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
 
 async def calculate_total_revenue(property_id: str, tenant_id: str) -> Dict[str, Any]:
     """

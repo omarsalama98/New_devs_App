@@ -51,10 +51,13 @@ async def get_dashboard_summary(
     
     # Round before converting: a float can't hold the exact value, so half-up is only reliable on the Decimal
     total_revenue_float = float(Decimal(revenue_data["total"]).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+    # .get because entries cached before this field existed can live for up to 5 minutes
+    trend_percent = revenue_data.get("trend_percent")
     
     return {
         "property_id": revenue_data['property_id'],
         "total_revenue": total_revenue_float,
         "currency": revenue_data['currency'],
-        "reservations_count": revenue_data['count']
+        "reservations_count": revenue_data['count'],
+        "trend_percent": float(trend_percent) if trend_percent is not None else None
     }

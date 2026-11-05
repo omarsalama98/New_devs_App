@@ -6,6 +6,7 @@ interface RevenueData {
     total_revenue: number;
     currency: string;
     reservations_count: number;
+    trend_percent: number | null;
 }
 
 interface RevenueSummaryProps {
@@ -16,6 +17,31 @@ interface RevenueSummaryProps {
     year?: number;
 }
 
+const TrendBadge: React.FC<{ percent: number | null }> = ({ percent }) => {
+    if (percent === null) {
+        return <span className="text-xs font-medium text-gray-400 md:mt-2 lg:mt-0">No prior data</span>;
+    }
+
+    if (percent === 0) {
+        return (
+            <span className="inline-flex items-baseline px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 md:mt-2 lg:mt-0">
+                0.0%
+            </span>
+        );
+    }
+
+    const isUp = percent > 0;
+
+    return (
+        <span className={`inline-flex items-baseline px-2.5 py-0.5 rounded-full text-xs font-medium md:mt-2 lg:mt-0 ${isUp ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+            <svg className={`-ml-1 mr-0.5 h-3 w-3 flex-shrink-0 self-center ${isUp ? 'text-green-500' : 'text-red-500 rotate-180'}`} fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+            </svg>
+            {isUp ? '+' : ''}{percent.toFixed(1)}%
+        </span>
+    );
+};
+
 export const RevenueSummary: React.FC<RevenueSummaryProps> = ({ propertyId = 'prop-001', debugTenant, showRaw, month, year }) => {
     const [data, setData] = useState<RevenueData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -24,6 +50,9 @@ export const RevenueSummary: React.FC<RevenueSummaryProps> = ({ propertyId = 'pr
     const activeTenant = debugTenant || 'candidate';
 
     useEffect(() => {
+        // Set when the property or month changes, so a slow response for the old one can't overwrite the new one
+        let cancelled = false;
+
         const fetchRevenue = async () => {
             setLoading(true);
             setError('');
@@ -36,16 +65,26 @@ export const RevenueSummary: React.FC<RevenueSummaryProps> = ({ propertyId = 'pr
                     month,
                     year
                 });
-                setData(response);
+                if (!cancelled) {
+                    setData(response);
+                }
             } catch (err) {
-                setError('Failed to load revenue data');
+                if (!cancelled) {
+                    setError('Failed to load revenue data');
+                }
                 console.error(err);
             } finally {
-                setLoading(false);
+                if (!cancelled) {
+                    setLoading(false);
+                }
             }
         };
 
         fetchRevenue();
+
+        return () => {
+            cancelled = true;
+        };
     }, [propertyId, activeTenant, month, year]);
 
     if (loading) {
@@ -88,13 +127,7 @@ export const RevenueSummary: React.FC<RevenueSummaryProps> = ({ propertyId = 'pr
                             <span className="text-3xl font-bold text-gray-900 tracking-tight">
                                 {data.currency} {displayTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
-                            {/* Fake trend indicator for premium feel */}
-                            <span className="inline-flex items-baseline px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 md:mt-2 lg:mt-0">
-                                <svg className="-ml-1 mr-0.5 h-3 w-3 flex-shrink-0 self-center text-green-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                                    <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                                </svg>
-                                12%
-                            </span>
+                            {month && year ? <TrendBadge percent={data.trend_percent} /> : null}
                         </div>
                         <p className="text-xs text-gray-500 font-medium mt-1">{periodLabel}</p>
                     </div>

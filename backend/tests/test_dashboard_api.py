@@ -244,3 +244,57 @@ def test_sub_cent_total_rounds_half_up_for_ocean(get_summary, ocean_headers, add
 
 def test_total_already_in_cents_is_unchanged(get_summary, sunset_headers):
     assert totals(get_summary(sunset_headers, "prop-002")) == (4975.5, 4)
+
+
+def trend(response):
+    assert response.status_code == 200, response.text
+    return response.json()["trend_percent"]
+
+
+# March has February's 0 before it, and February has January's 0 before it
+@pytest.mark.parametrize("month", [3, 2])
+def test_trend_is_null_when_the_previous_month_has_no_revenue(get_summary, sunset_headers, month):
+    assert trend(get_summary(sunset_headers, "prop-001", month=month, year=2024)) is None
+
+
+def test_trend_is_null_for_all_time(get_summary, sunset_headers):
+    assert trend(get_summary(sunset_headers, "prop-001")) is None
+
+
+def test_empty_month_after_revenue_is_a_true_100_percent_drop(get_summary, sunset_headers):
+    response = get_summary(sunset_headers, "prop-001", month=4, year=2024)
+
+    assert totals(response) == (0.0, 0)
+    assert trend(response) == -100.0
+
+
+@pytest.mark.parametrize(
+    "february_amount, expected",
+    [
+        ("1125.000", 100.0),
+        ("3000.000", -25.0),
+        ("2250.000", 0.0),
+    ],
+)
+def test_trend_compares_march_with_february(get_summary, sunset_headers, add_reservation, february_amount, expected):
+    add_reservation("test-trend-feb", "prop-001", "tenant-a", "2024-02-15 12:00:00+00", february_amount)
+
+    assert trend(get_summary(sunset_headers, "prop-001", month=3, year=2024)) == expected
+
+
+def test_january_trend_compares_with_december_of_the_year_before(get_summary, sunset_headers, add_reservation):
+    add_reservation("test-trend-dec", "prop-001", "tenant-a", "2023-12-15 12:00:00+00", "1000.000")
+    add_reservation("test-trend-jan", "prop-001", "tenant-a", "2024-01-15 12:00:00+00", "2000.000")
+
+    assert trend(get_summary(sunset_headers, "prop-001", month=1, year=2024)) == 100.0
+
+
+def test_repeat_call_reads_the_trend_from_the_cache(get_summary, sunset_headers, add_reservation, live_redis):
+    add_reservation("test-trend-feb-1", "prop-001", "tenant-a", "2024-02-15 12:00:00+00", "1125.000")
+    assert trend(get_summary(sunset_headers, "prop-001", month=3, year=2024)) == 100.0
+
+    # This row would make the trend 0.0 if the second call recalculated instead of reading the cache
+    add_reservation("test-trend-feb-2", "prop-001", "tenant-a", "2024-02-16 12:00:00+00", "1125.000")
+    assert trend(get_summary(sunset_headers, "prop-001", month=3, year=2024)) == 100.0
+
+    assert live_redis.exists("revenue:tenant-a:prop-001:2024-03")

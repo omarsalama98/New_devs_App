@@ -1,4 +1,5 @@
 import json
+from decimal import Decimal
 import redis.asyncio as redis
 from typing import Dict, Any, Optional
 import os
@@ -21,13 +22,20 @@ async def get_revenue_summary(property_id: str, tenant_id: str, month: Optional[
         return json.loads(cached)
     
     # Revenue calculation is delegated to the reservation service.
-    from app.services.reservations import calculate_monthly_revenue, calculate_total_revenue
+    from app.services.reservations import calculate_monthly_revenue, calculate_total_revenue, calculate_trend_percent
     
     # Calculate revenue
     if month is not None:
         result = await calculate_monthly_revenue(property_id, tenant_id, month, year)
+        # January compares with December of the year before
+        previous_month, previous_year = (12, year - 1) if month == 1 else (month - 1, year)
+        previous = await calculate_monthly_revenue(property_id, tenant_id, previous_month, previous_year)
+        trend = calculate_trend_percent(Decimal(result["total"]), Decimal(previous["total"]))
+        # Stored as a string because json.dumps can't serialise a Decimal
+        result["trend_percent"] = str(trend) if trend is not None else None
     else:
         result = await calculate_total_revenue(property_id, tenant_id)
+        result["trend_percent"] = None
     
     # Cache the result for 5 minutes
     await redis_client.setex(cache_key, 300, json.dumps(result))
