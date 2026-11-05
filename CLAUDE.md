@@ -40,5 +40,5 @@ Run from the repo root unless a `cd` is shown. Client logins are in `ASSIGNMENT.
 <!-- Add anything surprising as it comes up: pre-existing failures, missing env vars, quirks in the starter. -->
 - `frontend/node_modules` and `frontend/dist` are committed and there's no `.gitignore`. Don't run `npm install` or `npm run build`: they would dirty tracked files. Use the commands in §Commands.
 - `frontend/.env` is excluded from the Docker build by `.dockerignore`, so the bundle falls back to `http://localhost:8000`.
-- With the stack running, the backend logs `Database error for ...` when it falls back to mock data. Check for that line before trusting a figure.
+- A `Database error:` line in the backend log means the request returned 503. There's no mock fallback any more.
 - Docker Desktop on this Mac is old (2022, Docker 20.10.17) and `docker info` crashed before Desktop was started. If `docker compose up --build` won't run within a few minutes, run it locally instead: Homebrew Postgres is installed (`psql`, `pg_ctl`); create the `propertyflow` DB and load `database/schema.sql` then `database/seed.sql`. Install Redis with `brew install redis`, then `redis-server --daemonize yes`. Start the backend from `backend/` with `DATABASE_URL`, `REDIS_URL` and `SECRET_KEY` as in `docker-compose.yml`, but pointing at localhost. Run the frontend with `npm run dev`.
